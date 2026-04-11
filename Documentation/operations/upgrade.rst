@@ -346,7 +346,8 @@ The following options have been deprecated in this version of Cilium. A future
 version of Cilium will remove these options, so if you use these options then
 you may need to take action to migrate to an alternative.
 
-* TODO
+* The ``--tofqdns-pre-cache`` agent flag and the corresponding Helm value
+  ``dnsProxy.preCache`` have been deprecated and will be removed in v1.21.
 
 Removed Options
 ###############
@@ -371,6 +372,11 @@ from Cilium.
 * The Helm value ``hubble.redact.kafka.apiKey`` and the corresponding
   ``hubble-redact-kafka-apikey`` agent flag have been removed as part of
   dropping Kafka support.
+
+* The ``cilium-dbg preflight fqdn-poller`` subcommand and the
+  ``preflight.tofqdnsPreCache`` Helm value have been removed. These were
+  originally introduced for the v1.3 to v1.4 upgrade path and are no longer
+  needed.
 
 Changes to Metrics
 ~~~~~~~~~~~~~~~~~~
