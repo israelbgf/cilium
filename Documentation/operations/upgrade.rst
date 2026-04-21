@@ -385,6 +385,9 @@ from Cilium.
 * The previously deprecated ``--node-port-mode`` agent flag has been removed
   in favor of the ``--bpf-lb-mode`` (``loadBalancer.mode`` Helm value).
 
+* The previously deprecated ``--k8s-api-server`` agent flag has been removed in
+  favor of ``--k8s-api-server-urls`` (Helm ``k8s.apiServerURLs`` value).
+
 Changes to Metrics
 ~~~~~~~~~~~~~~~~~~
 
