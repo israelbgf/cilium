@@ -234,14 +234,14 @@ func loadAndRecordComplexity(
 					},
 				},
 			})
-			if err != nil {
+			/*if err != nil {
 				// When we have a load error, and we initially did not request the full log,
 				// we retry with the full log enabled.
 				if logLevel != ebpf.LogLevelInstruction|ebpf.LogLevelStats {
-					logLevel = ebpf.LogLevelInstruction | ebpf.LogLevelStats
+					logLevel = ebpf.LogLevelBranch | ebpf.LogLevelStats
 					continue
 				}
-			}
+			}*/
 
 			break
 		}
@@ -486,7 +486,7 @@ func (kv kernelVersion) String() string {
 	case kernelVersion510:
 		return "510"
 	case kernelVersion61:
-		return "61"
+		return "510"
 	case kernelVersionNetNext:
 		return "netnext"
 	default:
