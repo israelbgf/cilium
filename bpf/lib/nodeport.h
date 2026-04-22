@@ -593,10 +593,13 @@ __nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
 	return 0;
 }
 
-static __always_inline int
+__noinline __weak int
 nodeport_extract_dsr_v6(struct __ctx_buff *ctx, int l4_off, union v6addr *addr, __be16 *port,
 			bool *dsr)
 {
+	if (!addr || !port || !dsr)
+		return DROP_INVALID;
+
 	return __nodeport_extract_dsr_v6(ctx, AUX(nodeport_lb6_ct_tuple), l4_off, addr, port, dsr);
 }
 
