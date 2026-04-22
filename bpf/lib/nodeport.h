@@ -104,6 +104,8 @@ struct dsr_opt_v4 {
 #define DSR_IPV6_OPT_LEN	(sizeof(struct dsr_opt_v6) - 4)
 #define DSR_IPV6_EXT_LEN	((sizeof(struct dsr_opt_v6) - 8) / 8)
 
+DEFINE_AUX(struct ipv6_ct_tuple, nodeport_lb6_ct_tuple);
+
 static __always_inline bool nodeport_uses_dsr(bool flip __maybe_unused)
 {
 #ifdef ENABLE_DSR
@@ -528,9 +530,9 @@ static __always_inline int find_dsr_v6(struct __ctx_buff *ctx, struct dsr_opt_v6
 }
 
 static __always_inline int
-nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
-			const struct ipv6_ct_tuple *tuple, int l4_off,
-			union v6addr *addr, __be16 *port, bool *dsr)
+__nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
+			  const struct ipv6_ct_tuple *tuple, int l4_off,
+			  union v6addr *addr, __be16 *port, bool *dsr)
 {
 	struct ipv6_ct_tuple tmp = *tuple;
 
@@ -589,6 +591,13 @@ nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
 		ct_update_dsr(get_ct_map6(&tmp), &tmp, false);
 
 	return 0;
+}
+
+static __always_inline int
+nodeport_extract_dsr_v6(struct __ctx_buff *ctx, int l4_off, union v6addr *addr, __be16 *port,
+			bool *dsr)
+{
+	return __nodeport_extract_dsr_v6(ctx, AUX(nodeport_lb6_ct_tuple), l4_off, addr, port, dsr);
 }
 
 static __always_inline int dsr_reply_icmp6(struct __ctx_buff *ctx,
@@ -1536,21 +1545,21 @@ static __always_inline int nodeport_lb6(struct __ctx_buff *ctx,
 					__s8 *ext_err,
 					bool __maybe_unused *dsr)
 {
-	fraginfo_t fraginfo;
+	struct ipv6_ct_tuple *tuple = AUX(nodeport_lb6_ct_tuple);
 	bool is_svc_proto __maybe_unused = true;
 	int ret, l3_off = ETH_HLEN, l4_off;
-	struct ipv6_ct_tuple tuple __align_stack_8 = {};
 	const struct lb6_service *svc;
 	struct lb6_key key = {};
+	fraginfo_t fraginfo;
 
-	tuple.nexthdr = ip6->nexthdr;
-	ret = ipv6_hdrlen_with_fraginfo(ctx, &tuple.nexthdr, &fraginfo);
+	tuple->nexthdr = ip6->nexthdr;
+	ret = ipv6_hdrlen_with_fraginfo(ctx, &tuple->nexthdr, &fraginfo);
 	if (ret < 0)
 		return ret;
 
 	l4_off = ETH_HLEN + ret;
 
-	ret = lb6_extract_tuple(ctx, ip6, fraginfo, l4_off, &tuple);
+	ret = lb6_extract_tuple(ctx, ip6, fraginfo, l4_off, tuple);
 	if (IS_ERR(ret)) {
 		if (ret == DROP_UNSUPP_SERVICE_PROTO) {
 			is_svc_proto = false;
@@ -1563,11 +1572,11 @@ static __always_inline int nodeport_lb6(struct __ctx_buff *ctx,
 		return ret;
 	}
 
-	lb6_fill_key(&key, &tuple);
+	lb6_fill_key(&key, tuple);
 
 	svc = lb6_lookup_service(&key, false);
 	if (svc)
-		return nodeport_svc_lb6(ctx, &tuple, svc, &key, ip6, l3_off,
+		return nodeport_svc_lb6(ctx, tuple, svc, &key, ip6, l3_off,
 					fraginfo, l4_off, src_sec_identity,
 					punt_to_stack, ext_err);
 
@@ -1592,11 +1601,11 @@ skip_service_lookup:
     ((defined(IS_BPF_XDP) || defined(IS_BPF_HOST) || defined(IS_BPF_WIREGUARD)) && \
      (DSR_ENCAP_MODE == DSR_ENCAP_NONE))
 	if (is_svc_proto) {
-		ret = nodeport_extract_dsr_v6(ctx, &tuple, l4_off, &key.address, &key.dport, dsr);
+		ret = nodeport_extract_dsr_v6(ctx, l4_off, &key.address, &key.dport, dsr);
 		if (IS_ERR(ret))
 			return ret;
 		if (*dsr)
-			return nodeport_dsr_ingress_ipv6(ctx, &tuple, fraginfo, l4_off,
+			return nodeport_dsr_ingress_ipv6(ctx, tuple, fraginfo, l4_off,
 							 &key.address, key.dport,
 							 ext_err);
 	}
