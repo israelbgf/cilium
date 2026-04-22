@@ -488,11 +488,14 @@ static __always_inline int encap_geneve_dsr_opt6(struct __ctx_buff *ctx,
 }
 # endif /* DSR_ENCAP_MODE */
 
-static __always_inline int find_dsr_v6(struct __ctx_buff *ctx, __u8 nexthdr,
-				       struct dsr_opt_v6 *dsr_opt, bool *found)
+static __always_inline int find_dsr_v6(struct __ctx_buff *ctx, struct dsr_opt_v6 *dsr_opt,
+				       bool *found)
 {
 	int i, len = sizeof(struct ipv6hdr);
-	__u8 nh = nexthdr;
+	__u8 nh;
+
+	if (ctx_load_bytes(ctx, ETH_HLEN + offsetof(struct ipv6hdr, nexthdr), &nh, sizeof(nh)) < 0)
+		return DROP_INVALID;
 
 #pragma unroll
 	for (i = 0; i < IPV6_MAX_HEADERS; i++) {
@@ -526,7 +529,6 @@ static __always_inline int find_dsr_v6(struct __ctx_buff *ctx, __u8 nexthdr,
 
 static __always_inline int
 nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
-			struct ipv6hdr *ip6 __maybe_unused,
 			const struct ipv6_ct_tuple *tuple, int l4_off,
 			union v6addr *addr, __be16 *port, bool *dsr)
 {
@@ -568,7 +570,7 @@ nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
 		struct dsr_opt_v6 opt __align_stack_8 = {};
 		int ret;
 
-		ret = find_dsr_v6(ctx, ip6->nexthdr, &opt, dsr);
+		ret = find_dsr_v6(ctx, &opt, dsr);
 		if (ret != 0)
 			return ret;
 
@@ -1590,9 +1592,7 @@ skip_service_lookup:
     ((defined(IS_BPF_XDP) || defined(IS_BPF_HOST) || defined(IS_BPF_WIREGUARD)) && \
      (DSR_ENCAP_MODE == DSR_ENCAP_NONE))
 	if (is_svc_proto) {
-		ret = nodeport_extract_dsr_v6(ctx, ip6, &tuple, l4_off,
-					      &key.address,
-					      &key.dport, dsr);
+		ret = nodeport_extract_dsr_v6(ctx, &tuple, l4_off, &key.address, &key.dport, dsr);
 		if (IS_ERR(ret))
 			return ret;
 		if (*dsr)
