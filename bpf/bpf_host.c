@@ -472,7 +472,8 @@ tail_handle_ipv6(struct __ctx_buff *ctx, __u32 ipcache_srcid, const bool from_ho
 
 	/* TC_ACT_REDIRECT is not an error, but it means we should stop here. */
 	if (ret == CTX_ACT_OK) {
-		bool use_tailcall = is_defined(ENABLE_HOST_FIREWALL);
+		bool use_tailcall = is_defined(ENABLE_HOST_FIREWALL) ||
+				    (!from_host && is_defined(ENABLE_NODEPORT));
 
 		if (punt_to_stack)
 			return ret;
