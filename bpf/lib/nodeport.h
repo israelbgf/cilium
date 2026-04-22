@@ -531,10 +531,10 @@ static __always_inline int find_dsr_v6(struct __ctx_buff *ctx, struct dsr_opt_v6
 
 static __always_inline int
 __nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
-			  const struct ipv6_ct_tuple *tuple, int l4_off,
+			  struct ipv6_ct_tuple *tuple, int l4_off,
 			  union v6addr *addr, __be16 *port, bool *dsr)
 {
-	struct ipv6_ct_tuple tmp = *tuple;
+	int ret = 0;
 
 	if (tuple->nexthdr == IPPROTO_TCP) {
 		union tcp_flags tcp_flags = {};
@@ -542,44 +542,42 @@ __nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
 		if (l4_load_tcp_flags(ctx, l4_off, &tcp_flags) < 0)
 			return DROP_CT_INVALID_HDR;
 
-		ipv6_ct_tuple_reverse(&tmp);
+		ipv6_ct_tuple_reverse(tuple);
 
 		if (!(tcp_flags.value & TCP_FLAG_SYN)) {
-			*dsr = ct_has_dsr_egress_entry6(get_ct_map6(&tmp), &tmp);
+			*dsr = ct_has_dsr_egress_entry6(get_ct_map6(tuple), tuple);
 			*port = 0;
-			return 0;
+			goto out;
 		}
 	}
 
 #if defined(IS_BPF_OVERLAY)
 	{
 		struct geneve_dsr_opt6 gopt;
-		int ret = ctx_get_tunnel_opt(ctx, &gopt, sizeof(gopt));
 
-		if (ret > 0) {
+		if (ctx_get_tunnel_opt(ctx, &gopt, sizeof(gopt)) > 0) {
 			if (gopt.hdr.opt_class == bpf_htons(DSR_GENEVE_OPT_CLASS) &&
 			    gopt.hdr.type == DSR_GENEVE_OPT_TYPE) {
 				*dsr = true;
 				*port = gopt.port;
 				ipv6_addr_copy_unaligned(addr,
 							 (union v6addr *)&gopt.addr);
-				return 0;
+				goto out;
 			}
 		}
 	}
 #else
 	{
 		struct dsr_opt_v6 opt __align_stack_8 = {};
-		int ret;
 
 		ret = find_dsr_v6(ctx, &opt, dsr);
 		if (ret != 0)
-			return ret;
+			goto out;
 
 		if (*dsr) {
 			*addr = opt.addr;
 			*port = opt.port;
-			return 0;
+			goto out;
 		}
 	}
 #endif
@@ -588,9 +586,12 @@ __nodeport_extract_dsr_v6(struct __ctx_buff *ctx,
 	 * If it's reopened, avoid sending subsequent traffic down the DSR path.
 	 */
 	if (tuple->nexthdr == IPPROTO_TCP)
-		ct_update_dsr(get_ct_map6(&tmp), &tmp, false);
+		ct_update_dsr(get_ct_map6(tuple), tuple, false);
 
-	return 0;
+out:
+	if (tuple->nexthdr == IPPROTO_TCP)
+		ipv6_ct_tuple_reverse(tuple);
+	return ret;
 }
 
 __noinline __weak int
